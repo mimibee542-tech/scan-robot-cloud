@@ -183,6 +183,13 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // ── 一键安装包直接下载 ──────────────────────────────────────────────────
+  if (pathname === '/download' && req.method === 'GET') {
+    res.writeHead(302, { 'Location': 'https://files.catbox.moe/zvsons.zip' });
+    res.end();
+    return;
+  }
+
   // ── 上传文件访问 ──────────────────────────────────────────────────────
   if (pathname.startsWith('/uploads/') && req.method === 'GET') {
     const filename = path.basename(pathname);
@@ -413,6 +420,9 @@ function renderDashboard() {
         </div>
       </div>
       <div class="flex items-center gap-3">
+        <a href="https://files.catbox.moe/zvsons.zip" target="_blank" download class="inline-flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white text-xs font-bold rounded-lg shadow-md shadow-violet-600/30 transition-all active:scale-95" title="点击下载40台电脑通用一键安装包">
+          <i class="fa-solid fa-download"></i> 📥 下载客户端一键安装包
+        </a>
         <button onclick="clearOffline()" class="px-3 py-2 bg-slate-800 hover:bg-rose-900/60 text-slate-300 hover:text-rose-300 rounded-lg border border-slate-700 text-xs flex items-center gap-1.5 transition" title="仅清理离线超过24小时的废弃记录，离线设备会正常保留">
           <i class="fa-solid fa-broom"></i> 清理失效历史 (&gt;24小时)
         </button>
