@@ -1,0 +1,12 @@
+{
+  "name": "scan-robot-cloud-server",
+  "version": "2.0.0",
+  "description": "SCAN ROBOT 云端监控服务器 - 停电也能监控，自动 Telegram 告警",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
