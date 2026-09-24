@@ -348,8 +348,9 @@ const server = http.createServer(async (req, res) => {
   if (pathname === '/api/clear-offline' && req.method === 'POST') {
     devices = loadJson(devicesFile, {});
     const now = Date.now();
+    // 保护机制：仅清理离线超过 24 小时 (86400秒) 的废弃旧设备，绝不误删刚断电/重启的设备！
     for (const [id, dev] of Object.entries(devices)) {
-      if (Math.floor((now - (dev.lastSeen || 0)) / 1000) > OFFLINE_THRESHOLD_SEC) delete devices[id];
+      if (Math.floor((now - (dev.lastSeen || 0)) / 1000) > 86400) delete devices[id];
     }
     saveJson(devicesFile, devices);
     res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -412,10 +413,10 @@ function renderDashboard() {
         </div>
       </div>
       <div class="flex items-center gap-3">
-        <button onclick="clearOffline()" class="px-3 py-2 bg-slate-800 hover:bg-rose-900/60 text-slate-300 hover:text-rose-300 rounded-lg border border-slate-700 text-xs flex items-center gap-1.5 transition">
-          <i class="fa-solid fa-broom"></i> 清理离线
+        <button onclick="clearOffline()" class="px-3 py-2 bg-slate-800 hover:bg-rose-900/60 text-slate-300 hover:text-rose-300 rounded-lg border border-slate-700 text-xs flex items-center gap-1.5 transition" title="仅清理离线超过24小时的废弃记录，离线设备会正常保留">
+          <i class="fa-solid fa-broom"></i> 清理失效历史 (&gt;24小时)
         </button>
-        <button onclick="refreshData()" class="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 transition">
+        <button onclick="refreshData()" class="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 transition" title="刷新状态">
           <i class="fa-solid fa-rotate" id="refresh-icon"></i>
         </button>
       </div>
@@ -506,21 +507,42 @@ function renderDashboard() {
 
   <!-- Lightbox -->
   <div id="img-modal" class="fixed inset-0 z-50 modal-backdrop hidden flex items-center justify-center p-4" onclick="closeImgModal()">
-    <div class="relative max-w-5xl w-full" onclick="event.stopPropagation()">
-      <button onclick="closeImgModal()" class="absolute -top-10 right-0 text-white text-2xl hover:text-violet-400"><i class="fa-solid fa-xmark"></i></button>
-      <img id="modal-img" src="" class="rounded-xl max-h-[85vh] w-auto shadow-2xl border border-slate-700 object-contain mx-auto">
-      <div id="modal-caption" class="text-sm text-slate-300 mt-3 text-center"></div>
+    <div class="relative max-w-6xl w-full flex flex-col items-center" onclick="event.stopPropagation()">
+      <div class="w-full flex items-center justify-between pb-3 text-white">
+        <span id="modal-caption" class="text-sm font-bold text-slate-200"></span>
+        <div class="flex items-center gap-2">
+          <button onclick="window.open(document.getElementById('modal-img').src, '_blank')" class="px-3.5 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-semibold rounded-lg flex items-center gap-1.5 shadow transition">
+            <i class="fa-solid fa-up-right-from-square"></i> 在新窗口打开 100% 超清大图
+          </button>
+          <button onclick="closeImgModal()" class="text-slate-400 hover:text-white text-2xl p-1"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+      </div>
+      <div class="w-full max-h-[80vh] overflow-auto rounded-xl border border-slate-700 bg-black/60 p-1 flex items-center justify-center">
+        <img id="modal-img" src="" class="rounded-lg max-h-[78vh] w-auto shadow-2xl object-contain mx-auto cursor-zoom-in" onclick="window.open(this.src, '_blank')" title="点击在新窗口查看 100% 原始尺寸">
+      </div>
+      <p class="text-xs text-slate-400 mt-2"><i class="fa-solid fa-circle-info mr-1 text-cyan-400"></i>提示：点击图片或右上角按钮即可在浏览器新标签页以 100% 原始分辨率查看终端代码细节</p>
     </div>
   </div>
 
   <!-- Log Modal -->
   <div id="log-modal" class="fixed inset-0 z-50 modal-backdrop hidden flex items-center justify-center p-4" onclick="closeLogModal()">
-    <div class="glass-card bg-slate-900 border border-slate-700 rounded-2xl max-w-4xl w-full max-h-[85vh] flex flex-col p-6 shadow-2xl" onclick="event.stopPropagation()">
+    <div class="glass-card bg-slate-900 border border-slate-700 rounded-2xl max-w-5xl w-full max-h-[88vh] flex flex-col p-6 shadow-2xl" onclick="event.stopPropagation()">
       <div class="flex items-center justify-between pb-3 border-b border-slate-800">
-        <h3 id="log-modal-title" class="font-bold text-slate-100 flex items-center gap-2"><i class="fa-solid fa-file-lines text-violet-400"></i> 故障记事本</h3>
-        <button onclick="closeLogModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+        <h3 id="log-modal-title" class="font-bold text-slate-100 flex items-center gap-2 text-sm md:text-base">
+          <i class="fa-solid fa-file-code text-emerald-400"></i> 故障现场记事本与运行代码
+        </h3>
+        <div class="flex items-center gap-3">
+          <button onclick="copyLogModalText()" id="copy-log-btn" class="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg shadow-md flex items-center gap-1.5 transition active:scale-95">
+            <i class="fa-solid fa-copy"></i> 📋 一键复制当前全部代码与日志
+          </button>
+          <button onclick="closeLogModal()" class="text-slate-400 hover:text-white text-lg p-1">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
       </div>
-      <pre id="log-modal-body" class="flex-1 overflow-auto bg-slate-950 p-4 rounded-xl text-xs font-mono text-emerald-400 mt-4 border border-slate-800 leading-relaxed whitespace-pre-wrap"></pre>
+      <div class="relative flex-1 overflow-hidden mt-4">
+        <pre id="log-modal-body" class="h-full overflow-auto bg-slate-950 p-4 rounded-xl text-xs font-mono text-emerald-400 border border-slate-800 leading-relaxed whitespace-pre-wrap select-all"></pre>
+      </div>
     </div>
   </div>
 
@@ -620,11 +642,32 @@ function renderDashboard() {
     function closeImgModal() { document.getElementById('img-modal').classList.add('hidden'); }
     function viewLog(id) {
       const r = allReports.find(x=>x.id===id); if(!r) return;
-      document.getElementById('log-modal-title').innerHTML = '<i class="fa-solid fa-file-lines text-violet-400"></i> '+r.computerName+' 报错记录';
+      document.getElementById('log-modal-title').innerHTML = '<i class="fa-solid fa-file-code text-emerald-400"></i> '+r.computerName+' - 当前卡死脚本与全部代码';
       document.getElementById('log-modal-body').textContent = r.reportText || '无内容';
       document.getElementById('log-modal').classList.remove('hidden');
     }
     function closeLogModal() { document.getElementById('log-modal').classList.add('hidden'); }
+
+    function copyLogModalText() {
+      const text = document.getElementById('log-modal-body').innerText;
+      const btn = document.getElementById('copy-log-btn');
+      if (!navigator.clipboard) {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+      } else {
+        navigator.clipboard.writeText(text);
+      }
+      btn.innerHTML = '<i class="fa-solid fa-check text-white"></i> ✅ 已成功复制全部代码！';
+      btn.classList.replace('bg-emerald-600', 'bg-cyan-600');
+      setTimeout(() => {
+        btn.innerHTML = '<i class="fa-solid fa-copy"></i> 📋 一键复制当前全部代码与日志';
+        btn.classList.replace('bg-cyan-600', 'bg-emerald-600');
+      }, 2500);
+    }
 
     async function refreshData() {
       const ic = document.getElementById('refresh-icon');
@@ -634,7 +677,7 @@ function renderDashboard() {
     }
 
     async function clearOffline() {
-      if (!confirm('确定清理所有离线设备记录吗？')) return;
+      if (!confirm('提示：此操作仅会清除【已离线超过 24 小时】的废弃旧设备。刚关机、断电或正在重启的设备会受到安全保护，不会被误删。确定清理吗？')) return;
       await fetch('/api/clear-offline', {method:'POST'});
       await fetchData();
     }
